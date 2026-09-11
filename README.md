@@ -1,99 +1,113 @@
-# Ultra Review для Codex CLI (v0.2.0)
+# Ultra Review для Codex CLI
 
 Глубокое многоагентное ревью кода для Codex CLI: независимые finder-агенты, отдельный
 verifier на каждую находку, воспроизведение в одноразовой копии репозитория, sweep по
 пропускам, независимый adjudicator и детерминированный gate, который сверяет каждую
-цитату со снимком файлов и каждую заявленную команду с реальным журналом выполнения.
+цитату со снимком файлов и каждую заявленную команду с журналом выполнения агента.
 
-Два входа, один протокол:
+Корень этого репозитория и есть скилл Codex: `SKILL.md`, `agents/`, `scripts/`,
+`references/` и `kit/` с драйвером. Python 3.9+, только стандартная библиотека.
+Ничего не скачивается, `config.toml` не меняется, исходники проекта не редактируются.
 
-| Вход | Где работает | Изоляция агентов | Аутентификация команд |
-|---|---|---|---|
-| `ultrareview run` (драйвер) | терминал, `codex exec` на каждую роль | гарантирована процессом | да, по событиям `--json` |
-| `$ultrareview` (skill) | интерактивный Codex, `spawn_agent` с `fork_turns: "none"` | по инструкции координатору | нет (в отчёте сказано явно) |
-
-Python 3.9+, только стандартная библиотека. Ничего не скачивается, `config.toml` не
-меняется, исходники проекта никогда не редактируются.
-
-## Установка
+## Установка для команды (одна минута)
 
 ```bash
-cd codex-ultrareview-kit-v2
-python3 -m unittest discover -s tests -t .      # 130+ тестов, все через fake codex
-python3 install.py --dry-run
-python3 install.py                              # ~/.agents/skills/ultrareview + kit/
-ln -s ~/.agents/skills/ultrareview/kit/bin/ultrareview ~/.local/bin/ultrareview
+git clone <url-этого-репозитория> ~/.agents/skills/ultrareview
+ln -sf ~/.agents/skills/ultrareview/kit/bin/ultrareview ~/.local/bin/ultrareview   # CLI, по желанию
 ```
 
-`python3 install.py --with-hooks` дополнительно кладёт PreToolUse-guard в
-`~/.codex/hooks.json` (если файла ещё нет; иначе печатает сниппет для ручного слияния).
-Guard запрещает правки файлов, пока существует маркер `$TMPDIR/ultrareview/REVIEW_ACTIVE`.
+Обновление: `git -C ~/.agents/skills/ultrareview pull`. Перезапустить Codex один раз,
+чтобы скилл появился. Требования: установленный и авторизованный Codex CLI с
+поддержкой sub-agents (проверено на 0.154.0), git, python3.
 
-## Драйвер
+Кому не хочется держать git-клон в каталоге скиллов: `python3 install.py` копирует
+только нужные файлы туда же; `--with-hooks` дополнительно ставит PreToolUse-guard,
+который запрещает правки файлов, пока идёт ревью.
+
+## Как пользоваться
+
+Внутри Codex, в каталоге проекта:
+
+```text
+$ultrareview                                   # ветка против origin/HEAD|main|master + uncommitted
+$ultrareview scope=changes profile=fast         # только незакоммиченное, 5 углов
+$ultrareview scope=branch base=develop lang=ru  # своя база, тексты агентов по-русски
+$ultrareview commit=abc123 repro=all            # один коммит, воспроизводить всё
+```
+
+Скилл вызывается только явно; сам Codex его не запускает. Любой текст после параметров
+(например «проверь особенно auth») становится приоритетом для агентов, но не сужает
+область.
+
+Из терминала, с полной аутентификацией команд (каждая роль отдельным `codex exec`):
 
 ```bash
-ultrareview run                                  # ветка против origin/HEAD|main|master + uncommitted
-ultrareview run --scope changes --profile fast   # только незакоммиченное, 5 углов
-ultrareview run --scope commit --commit HEAD~1   # один коммит
+ultrareview run                                  # то же, что $ultrareview
+ultrareview run --scope changes --profile fast
 ultrareview run --scope repo --paths 'src/auth/**' --jobs 6
 ultrareview plan --scope branch --base develop   # только план, без агентов
 ```
 
 Ключевые флаги: `--profile fast|standard|deep` (5/9/10 углов, по умолчанию deep),
 `--votes N`, `--repro auto|off|all` и `--max-repro`, `--max-findings`, `--jobs`,
-`--agent-timeout`, `--max-files/--max-lines` (по умолчанию 500/8000, как у облачного
-ultrareview), `--model`, `--effort` и `--effort-<роль>` (`finder`, `verifier`,
-`reproducer`, `adjudicator`, `mapper`, `triage`, `sweep`), `--lang en|ru` (язык текстов
-агентов), `--note "<текст>"` (приоритет для агентов, не сужение области),
+`--agent-timeout`, `--max-files/--max-lines` (500/8000 как у облачного ultrareview),
+`--model`, `--effort` и `--effort-<роль>`, `--lang en|ru`, `--note "<текст>"`,
 `--repro-sandbox workspace-write|danger-full-access` (второе нужно Go-проектам, чтобы
 `go test` видел системный GOCACHE), `--keep-sessions`, `--keep-worktree`,
 `--no-preamble`, `--run-dir`.
 
-Модель и effort по умолчанию наследуются из `~/.codex/config.toml`. Каждый агент — свой
-`codex exec --ephemeral --json --output-schema -o`, stdin закрыт, брифы и события лежат
-в каталоге прогона (`~/.cache/ultrareview/runs/<stamp>-<repo>/`): `agents/*.brief.md`,
-`agents/*.events.jsonl`, `agents/*.output.json`, `ledger.jsonl`, `diff.patch`,
-`snapshot.json`, `state.json`, `report.md`, `report.json`, `run.json`.
+Модель и effort по умолчанию наследуются из `~/.codex/config.toml`. Артефакты прогона
+лежат в `~/.cache/ultrareview/runs/<stamp>-<repo>/` (в режиме скилла в `$TMPDIR/ultrareview/`):
+`report.md`, `report.json`, `agents/*.brief.md`, `agents/*.events.jsonl`,
+`agents/*.output.json`, `ledger.jsonl`, `diff.patch`, `snapshot.json`, `state.json`.
 
-Коды выхода: 0 — завершено; 1 — ошибка области или запуска (ничего не потрачено);
-3 — завершено, но partial или есть ошибки gate.
+Коды выхода: 0 завершено; 1 ошибка области или запуска (токены не потрачены);
+3 завершено, но partial или есть проблемы с доказательствами.
 
-## Skill
+## Как читать отчёт
 
-Внутри Codex: `$ultrareview scope=branch base=main profile=deep`. Координатор вызывает
-`scripts/ultrareview.py step`, получает манифест агентов, запускает каждого через
-`spawn_agent` с `fork_turns: "none"`, записывает их JSON в указанные файлы и повторяет
-`step`, пока не появится отчёт. Подробности в `skill/ultrareview/SKILL.md` и
-`references/protocol.md`.
+Сначала находки по убыванию severity P0–P3, у каждой бейдж: REPRODUCED (реальный код
+запущен и показал дефект, команда есть в журнале агента), SOURCE-VERIFIED (verifier
+назвал вход и неверный результат и процитировал строки), PLAUSIBLE (механизм реален,
+триггер не доказан, сказано, что его подтвердит). Затем unresolved (verifier не
+завершился или доказательства не прошли проверку), rejected с причинами, таблица
+покрытия по углам, ограничения и паспорт прогона. «Ошибок нет» отчёт не утверждает,
+только «в проверенной области не найдено».
 
-## Что делает результат сильнее обычного ревью
+Режим скилла не аутентифицирует команды sub-agents (у них нет отдельного журнала);
+отчёт пишет об этом. Для полной аутентификации есть CLI.
 
-- Каждая находка проходит НОВОГО verifier с трёхзначным вердиктом CONFIRMED / PLAUSIBLE /
-  REFUTED; REFUTED допустим только с конструктивным опровержением из кода. Гонки и редкие
-  ветки не отбрасываются как «спекуляция».
-- Finder-ы работают под углами, заточенными под diff (построчный скан, аудит удалённого
-  поведения, трассировка вызовов, ловушки языка, обёртки/прокси), плюс доменные углы.
-- Воспроизведение идёт против реального кода в одноразовом worktree, а gate требует,
-  чтобы команда воспроизведения была в журнале выполнения именно этого агента.
-- Sweep ищет только то, чего нет в подтверждённом списке; adjudicator не может повысить
-  вердикт и не может добавить находку без нового verifier.
-- Отчёт всегда содержит покрытие, ограничения и паспорт прогона; «ошибок нет» не
-  утверждается, только «в проверенной области не найдено».
+## Стоимость и время
 
-## Корпус для оценки
+Замеры на Codex 0.154.0, gpt-6-astra:
+
+| Профиль и effort | Агентов | Время | Входных токенов |
+|---|---|---|---|
+| standard, finder high / verifier xhigh, diff 3 файла | 28 | 16 мин | 2,6 млн (1,9 млн из кэша) |
+| deep, effort max, diff 11 файлов Go | 20 до лимита | 27 мин | 14 млн (12,8 млн из кэша) |
+
+Для повседневной работы разумен `profile=standard` с `--effort high --effort-verifier xhigh`.
+
+## Проверка качества
 
 ```bash
-python3 corpus/build.py python-svc /tmp/ur-corpus            # main = корректный код, feature = 5 дефектов
-ultrareview run --repo /tmp/ur-corpus --scope branch --base main --run-dir /tmp/ur-corpus-run
-python3 scripts/eval_corpus.py /tmp/ur-corpus-run/report.json /tmp/ur-corpus.expected.json
+python3 -m unittest discover -s tests -t .                      # 152 теста через fake codex
+python3 corpus/build.py python-svc /tmp/ur-corpus                # main корректен, feature с 5 дефектами
+ultrareview run --repo /tmp/ur-corpus --base main --run-dir /tmp/ur-run
+python3 scripts/eval_corpus.py /tmp/ur-run/report.json /tmp/ur-corpus.expected.json
 ```
 
-Скрипт печатает recall по заложенным дефектам, попадания в decoy и precision.
+На этом корпусе реальный прогон нашёл и воспроизвёл все пять дефектов, не тронул
+ловушку и отклонил два pre-existing бага с цитатами.
 
 ## Ограничения
 
-- Skill-режим не аутентифицирует команды агентов (у sub-agents нет отдельного журнала).
 - Воспроизведение требует установленных инструментов проекта; иначе `blocked` с
-  причиной, вердикт verifier сохраняется.
-- Gate доказывает структуру и подлинность цитат/команд, но не истинность рассуждений;
+  причиной, вердикт verifier сохраняется. В песочнице Codex `git worktree add`
+  запрещён, поэтому копия делается через `git archive`.
+- Gate доказывает структуру и подлинность цитат и команд, но не истинность рассуждений;
   для этого есть независимый adjudicator и, в конечном счёте, человек.
+- Один прогон deep на max effort стоит десятки миллионов токенов; лимиты аккаунта
+  превращают прогон в честный `partial`, а не в тихий пропуск.
+
+Подробный протокол: `references/protocol.md`. История изменений: `CHANGELOG.md`.

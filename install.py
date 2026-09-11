@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Install the Ultra Review skill (and the driver it needs) into ~/.agents/skills/ultrareview.
+"""Copy this skill into ~/.agents/skills/ultrareview for people who do not want a git clone there.
 
-Nothing is downloaded and config.toml is never touched. An existing installation is
-kept unless --force is given, in which case it is moved aside with a timestamp suffix.
---with-hooks writes hooks/hooks.json to ~/.codex/hooks.json when that file does not
-exist yet; otherwise the snippet to merge is printed.
+The repository root *is* the skill: SKILL.md, agents/, scripts/, references/ and kit/
+(the driver, prompts, hooks and the CLI launcher). Nothing is downloaded and
+config.toml is never touched. An existing installation is kept unless --force is
+given, in which case it is moved aside with a timestamp suffix. --with-hooks writes
+kit/hooks/hooks.json to ~/.codex/hooks.json when that file does not exist yet;
+otherwise the snippet to merge is printed.
 """
 from __future__ import annotations
 
@@ -17,8 +19,9 @@ import time
 from typing import Tuple
 
 SOURCE = Path(__file__).resolve().parent
-KIT_PARTS = ('ultrareview', 'prompts', 'hooks', 'bin', 'VERSION')
-IGNORE = shutil.ignore_patterns('__pycache__', '*.pyc', '.DS_Store')
+SKILL_PARTS = ('SKILL.md', 'agents', 'scripts', 'references', 'kit')
+REQUIRED = SKILL_PARTS + ('kit/ultrareview', 'kit/prompts', 'kit/hooks', 'kit/bin', 'kit/VERSION')
+IGNORE = shutil.ignore_patterns('__pycache__', '*.pyc', '.DS_Store', '.git')
 
 
 @dataclass(frozen=True)
@@ -28,7 +31,7 @@ class InstallResult:
 
 
 def _check_source(source: Path) -> None:
-    missing = [part for part in KIT_PARTS + ('skill/ultrareview/SKILL.md',) if not (source / part).exists()]
+    missing = [part for part in REQUIRED if not (source / part).exists()]
     if missing:
         raise FileNotFoundError(f'run the installer from the complete package; missing: {", ".join(missing)}')
 
@@ -51,17 +54,14 @@ def install(home: Path, source: Path = SOURCE, with_hooks: bool = False, dry_run
         if not dry_run:
             notes += (f'previous installation moved to {_move_aside(skill_dir)}',)
     if not dry_run:
-        skill_dir.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(source / 'skill' / 'ultrareview', skill_dir, ignore=IGNORE)
-        kit = skill_dir / 'kit'
-        kit.mkdir()
-        for part in KIT_PARTS:
+        skill_dir.mkdir(parents=True)
+        for part in SKILL_PARTS:
             src = source / part
             if src.is_dir():
-                shutil.copytree(src, kit / part, ignore=IGNORE)
+                shutil.copytree(src, skill_dir / part, ignore=IGNORE)
             else:
-                shutil.copy2(src, kit / part)
-        (kit / 'bin' / 'ultrareview').chmod(0o755)
+                shutil.copy2(src, skill_dir / part)
+        (skill_dir / 'kit' / 'bin' / 'ultrareview').chmod(0o755)
     notes += _hooks(home, source, with_hooks, dry_run)
     return InstallResult(skill_dir=skill_dir, notes=notes)
 
@@ -70,7 +70,7 @@ def _hooks(home: Path, source: Path, with_hooks: bool, dry_run: bool) -> Tuple[s
     if not with_hooks:
         return ()
     target = home / '.codex' / 'hooks.json'
-    snippet = (source / 'hooks' / 'hooks.json').read_text(encoding='utf-8')
+    snippet = (source / 'kit' / 'hooks' / 'hooks.json').read_text(encoding='utf-8')
     if target.exists():
         return (f'{target} already exists; merge this snippet by hand:\n{snippet}',)
     if not dry_run:
@@ -94,8 +94,8 @@ def main() -> int:
     print(f'{verb} skill to {result.skill_dir}')
     for note in result.notes:
         print(f'- {note}')
-    print('Driver launcher: ' + str(result.skill_dir / 'kit' / 'bin' / 'ultrareview')
-          + '  (add it to PATH or symlink it into ~/.local/bin)')
+    print('CLI launcher: ' + str(result.skill_dir / 'kit' / 'bin' / 'ultrareview')
+          + '  (symlink it into ~/.local/bin as `ultrareview`)')
     print('Inside Codex: $ultrareview scope=branch profile=deep   (restart Codex once so the skill is listed)')
     return 0
 

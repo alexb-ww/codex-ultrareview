@@ -66,7 +66,7 @@ class InstallTests(unittest.TestCase):
 class HookGuardTests(unittest.TestCase):
     def run_guard(self, payload: dict, marker: Path) -> subprocess.CompletedProcess:
         env = {'ULTRAREVIEW_ACTIVE': str(marker), 'PATH': '/usr/bin:/bin'}
-        return subprocess.run([sys.executable, str(ROOT / 'hooks' / 'ur_hook_guard.py')], input=json.dumps(payload),
+        return subprocess.run([sys.executable, str(ROOT / 'kit' / 'hooks' / 'ur_hook_guard.py')], input=json.dumps(payload),
                               capture_output=True, text=True, env=env)
 
     def test_guard_is_inert_without_marker_and_denies_with_it(self) -> None:

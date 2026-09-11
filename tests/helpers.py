@@ -10,8 +10,10 @@ import tempfile
 from typing import Optional
 
 ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+KIT = ROOT / 'kit'
+for entry in (str(KIT), str(ROOT)):
+    if entry not in sys.path:
+        sys.path.insert(0, entry)
 
 GIT_IDENTITY = ('-c', 'user.name=ur-test', '-c', 'user.email=ur-test@example.invalid',
                 '-c', 'commit.gpgsign=false', '-c', 'init.defaultBranch=main')
