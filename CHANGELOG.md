@@ -42,5 +42,10 @@ New implementation, replaces the 0.1.0 prototype.
   attaches a candidate only to a surviving finding of the same category; the installed
   hook path is correct and `step` maintains the guard marker; when a sandbox refuses
   `git worktree add`, reproduction copies fall back to a plain `git archive` copy.
+- Distribution: the repository is a Codex plugin marketplace (`.agents/plugins/marketplace.json`,
+  `.codex-plugin/plugin.json`, skill under `skills/ultrareview`); `codex plugin marketplace add
+  alexb-ww/codex-ultrareview` + `codex plugin add ultrareview@codex-ultrareview` installs it and the
+  skill is invoked as `$ultrareview:ultrareview`. The plan and the run passport show the model and
+  effort that actually apply (flag, config.toml or default); the skill accepts `model=` / `effort=`.
 - Tests: 150+ unit and integration tests against a fake `codex` binary; coverage 93 % of
   the package.

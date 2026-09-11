@@ -5,64 +5,92 @@ verifier на каждую находку, воспроизведение в о�
 пропускам, независимый adjudicator и детерминированный gate, который сверяет каждую
 цитату со снимком файлов и каждую заявленную команду с журналом выполнения агента.
 
-Корень этого репозитория и есть скилл Codex: `SKILL.md`, `agents/`, `scripts/`,
-`references/` и `kit/` с драйвером. Python 3.9+, только стандартная библиотека.
-Ничего не скачивается, `config.toml` не меняется, исходники проекта не редактируются.
+Python 3.9+, только стандартная библиотека. Ничего не скачивается, `config.toml` не
+меняется, исходники проекта не редактируются.
 
-## Установка для команды (одна минута)
+## Установка (две команды, без клонов и симлинков)
 
 ```bash
-git clone https://github.com/alexb-ww/codex-ultrareview.git ~/.agents/skills/ultrareview
-ln -sf ~/.agents/skills/ultrareview/kit/bin/ultrareview ~/.local/bin/ultrareview   # CLI, по желанию
+codex plugin marketplace add alexb-ww/codex-ultrareview
+codex plugin add ultrareview@codex-ultrareview
 ```
 
-Обновление: `git -C ~/.agents/skills/ultrareview pull`. Перезапустить Codex один раз,
-чтобы скилл появился. Требования: установленный и авторизованный Codex CLI с
-поддержкой sub-agents (проверено на 0.154.0), git, python3.
+Открыть новую сессию Codex и в каталоге проекта написать:
 
-Кому не хочется держать git-клон в каталоге скиллов: `python3 install.py` копирует
-только нужные файлы туда же; `--with-hooks` дополнительно ставит PreToolUse-guard,
-который запрещает правки файлов, пока идёт ревью.
+```text
+$ultrareview:ultrareview
+```
+
+Автодополнение подставит имя после `$ultra`. Обновление до свежей версии:
+
+```bash
+codex plugin marketplace upgrade && codex plugin add ultrareview@codex-ultrareview
+```
+
+Требования: авторизованный Codex CLI с поддержкой plugins и sub-agents (проверено на
+0.154.0), git, python3. Слэш-команд вида `/ultrareview` в Codex для своих скиллов нет:
+пользовательские скиллы вызываются через `$имя`.
+
+Альтернатива без плагинов: `git clone https://github.com/alexb-ww/codex-ultrareview.git`
+и `python3 install.py` из клона кладут скилл в `~/.agents/skills/ultrareview`, тогда
+вызов короче, просто `$ultrareview`; обновление через повторный `git pull` и
+`python3 install.py --force`.
 
 ## Как пользоваться
 
-Внутри Codex, в каталоге проекта:
-
 ```text
-$ultrareview                                   # ветка против origin/HEAD|main|master + uncommitted
-$ultrareview scope=changes profile=fast         # только незакоммиченное, 5 углов
-$ultrareview scope=branch base=develop lang=ru  # своя база, тексты агентов по-русски
-$ultrareview commit=abc123 repro=all            # один коммит, воспроизводить всё
+$ultrareview:ultrareview                                   # ветка против origin/HEAD|main|master + uncommitted
+$ultrareview:ultrareview scope=changes profile=fast        # только незакоммиченное, 5 углов
+$ultrareview:ultrareview scope=branch base=develop lang=ru # своя база, тексты агентов по-русски
+$ultrareview:ultrareview commit=abc123 repro=all           # один коммит, воспроизводить всё
+$ultrareview:ultrareview effort=high проверь особенно auth # effort для агентов + заметка-приоритет
 ```
 
-Скилл вызывается только явно; сам Codex его не запускает. Любой текст после параметров
-(например «проверь особенно auth») становится приоритетом для агентов, но не сужает
-область.
+Аргументы: `scope=branch|changes|commit|repo`, `base=`, `commit=`, `paths=`,
+`profile=fast|standard|deep`, `repro=auto|off|all`, `votes=`, `lang=en|ru`, `model=`,
+`effort=`. Остальной текст становится приоритетом для агентов, но не сужает область.
+Скилл вызывается только явно; сам Codex его не запускает.
 
-Из терминала, с полной аутентификацией команд (каждая роль отдельным `codex exec`):
+## На какой модели идёт ревью
+
+Скилл и драйвер модель не выбирают: каждый агент наследует `model` и
+`model_reasoning_effort` из `~/.codex/config.toml`. План и паспорт отчёта показывают, что
+именно применилось и откуда (флаг, config.toml или умолчание Codex). Переопределить:
+
+- в скилле `model=<имя>` и `effort=<уровень>` для всех агентов;
+- в CLI `--model`, `--effort` для всех ролей и `--effort-finder`, `--effort-verifier`,
+  `--effort-reproducer`, `--effort-adjudicator`, `--effort-mapper`, `--effort-triage`,
+  `--effort-sweep` по ролям. Рабочий рецепт: `--effort high --effort-verifier xhigh
+  --effort-adjudicator xhigh`, finder-ам max не нужен, verifier-ам нужен.
+
+## CLI из терминала
+
+Для полной аутентификации команд (каждая роль отдельным `codex exec` с журналом событий)
+есть драйвер. Launcher лежит внутри установленного скилла; удобнее сделать симлинк:
 
 ```bash
+# plugin-установка (путь содержит версию плагина)
+ln -sf ~/.codex/plugins/cache/codex-ultrareview/ultrareview/0.2.0/skills/ultrareview/kit/bin/ultrareview ~/.local/bin/ultrareview
+# установка через install.py
+ln -sf ~/.agents/skills/ultrareview/kit/bin/ultrareview ~/.local/bin/ultrareview
+
 ultrareview run                                  # то же, что $ultrareview
 ultrareview run --scope changes --profile fast
 ultrareview run --scope repo --paths 'src/auth/**' --jobs 6
 ultrareview plan --scope branch --base develop   # только план, без агентов
 ```
 
-Ключевые флаги: `--profile fast|standard|deep` (5/9/10 углов, по умолчанию deep),
-`--votes N`, `--repro auto|off|all` и `--max-repro`, `--max-findings`, `--jobs`,
-`--agent-timeout`, `--max-files/--max-lines` (500/8000 как у облачного ultrareview),
-`--model`, `--effort` и `--effort-<роль>`, `--lang en|ru`, `--note "<текст>"`,
-`--repro-sandbox workspace-write|danger-full-access` (второе нужно Go-проектам, чтобы
-`go test` видел системный GOCACHE), `--keep-sessions`, `--keep-worktree`,
-`--no-preamble`, `--run-dir`.
+Ключевые флаги: `--profile`, `--votes`, `--repro` и `--max-repro`, `--max-findings`,
+`--jobs`, `--agent-timeout`, `--max-files/--max-lines` (500/8000 как у облачного
+ultrareview), `--lang`, `--note`, `--repro-sandbox workspace-write|danger-full-access`
+(второе нужно Go-проектам, чтобы `go test` видел системный GOCACHE), `--keep-sessions`,
+`--keep-worktree`, `--no-preamble`, `--run-dir`.
 
-Модель и effort по умолчанию наследуются из `~/.codex/config.toml`. Артефакты прогона
-лежат в `~/.cache/ultrareview/runs/<stamp>-<repo>/` (в режиме скилла в `$TMPDIR/ultrareview/`):
-`report.md`, `report.json`, `agents/*.brief.md`, `agents/*.events.jsonl`,
-`agents/*.output.json`, `ledger.jsonl`, `diff.patch`, `snapshot.json`, `state.json`.
-
-Коды выхода: 0 завершено; 1 ошибка области или запуска (токены не потрачены);
-3 завершено, но partial или есть проблемы с доказательствами.
+Артефакты прогона: `~/.cache/ultrareview/runs/<stamp>-<repo>/` (в режиме скилла
+`$TMPDIR/ultrareview/`): `report.md`, `report.json`, `agents/*.brief.md`,
+`agents/*.events.jsonl`, `agents/*.output.json`, `ledger.jsonl`, `diff.patch`,
+`snapshot.json`, `state.json`. Коды выхода: 0 завершено; 1 ошибка области или запуска
+(токены не потрачены); 3 завершено, но partial или есть проблемы с доказательствами.
 
 ## Как читать отчёт
 
@@ -86,12 +114,12 @@ ultrareview plan --scope branch --base develop   # только план, без
 | standard, finder high / verifier xhigh, diff 3 файла | 28 | 16 мин | 2,6 млн (1,9 млн из кэша) |
 | deep, effort max, diff 11 файлов Go | 20 до лимита | 27 мин | 14 млн (12,8 млн из кэша) |
 
-Для повседневной работы разумен `profile=standard` с `--effort high --effort-verifier xhigh`.
+Для повседневной работы разумен `profile=standard effort=high`.
 
 ## Проверка качества
 
 ```bash
-python3 -m unittest discover -s tests -t .                      # 152 теста через fake codex
+python3 -m unittest discover -s tests -t .                      # 155 тестов через fake codex
 python3 corpus/build.py python-svc /tmp/ur-corpus                # main корректен, feature с 5 дефектами
 ultrareview run --repo /tmp/ur-corpus --base main --run-dir /tmp/ur-run
 python3 scripts/eval_corpus.py /tmp/ur-run/report.json /tmp/ur-corpus.expected.json
@@ -110,4 +138,7 @@ python3 scripts/eval_corpus.py /tmp/ur-run/report.json /tmp/ur-corpus.expected.j
 - Один прогон deep на max effort стоит десятки миллионов токенов; лимиты аккаунта
   превращают прогон в честный `partial`, а не в тихий пропуск.
 
-Подробный протокол: `references/protocol.md`. История изменений: `CHANGELOG.md`.
+Раскладка репозитория: `skills/ultrareview/` (SKILL.md, agents, scripts, references и
+`kit/` с драйвером, промптами, хуками и launcher-ом), `.codex-plugin/plugin.json`,
+`.agents/plugins/marketplace.json`, `tests/`, `corpus/`, `SPEC.md`. Протокол:
+`skills/ultrareview/references/protocol.md`. История: `CHANGELOG.md`.

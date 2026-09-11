@@ -10,7 +10,8 @@ import tempfile
 from typing import Optional
 
 ROOT = Path(__file__).resolve().parents[1]
-KIT = ROOT / 'kit'
+SKILL = ROOT / 'skills' / 'ultrareview'
+KIT = SKILL / 'kit'
 for entry in (str(KIT), str(ROOT)):
     if entry not in sys.path:
         sys.path.insert(0, entry)

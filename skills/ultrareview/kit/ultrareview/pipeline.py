@@ -11,6 +11,7 @@ from typing import Callable, Optional
 from . import __version__
 from .angles import select_angles
 from .briefs import BriefContext, brief_context_dict
+from .codex_config import effective_model
 from .config import RunConfig, ensure_run_dir_outside_repo
 from .errors import LimitExceeded, RunnerError, ScopeError
 from .gate import GateResult, run_gate
@@ -122,8 +123,8 @@ def plan_text(prepared: Prepared) -> str:
         f'({", ".join(a.id for a in angles)}); mapper: {"yes" if needs_map(Runtime(config, prepared.ctx, emit=lambda _: None)) else "no"}',
         f'verify: {config.votes} vote(s) per cluster; repro: {config.repro} (max {config.max_repro}); '
         f'sweep: yes; adjudicate: yes; jobs {config.jobs}; agent timeout {config.agent_timeout}s',
-        f'model: {config.effort.model or "inherited"}; effort: {config.effort.default or "inherited"}'
-        + (f'; per role {dict(config.effort.per_role)}' if config.effort.per_role else ''),
+        'model: {}; effort: {}{}'.format(*effective_model(config.effort.model, config.effort.default),
+                                         f'; per role {dict(config.effort.per_role)}' if config.effort.per_role else ''),
     ]
     lines.extend(f'note: {note}' for note in scope.notes)
     if scope.skipped:

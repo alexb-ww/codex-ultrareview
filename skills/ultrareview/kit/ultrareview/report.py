@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, List, Sequence, Tuple
 
+from .codex_config import effective_model
 from .config import RunConfig
 from .gate import GateResult
 from .ledger import Ledger, ledger_summary
@@ -109,7 +110,8 @@ def _passport(bundle: ReportBundle) -> str:
         f'- HEAD {scope.head or "-"}; base {scope.base_ref or "-"} ({scope.base_commit or "-"}); merge-base {scope.merge_base or "-"}'
         + (f'; commit {scope.commit}' if scope.commit else ''),
         f'- snapshot {bundle.snapshot.snapshot_id[:16]}; profile {bundle.config.profile}; votes {bundle.config.votes}; repro {bundle.config.repro}',
-        f'- codex {bundle.codex_version}; model {bundle.config.effort.model or "inherited from config"}; effort {bundle.config.effort.default or "inherited"}',
+        '- codex {}; model {}; effort {}{}'.format(bundle.codex_version, *effective_model(bundle.config.effort.model, bundle.config.effort.default),
+                                                 f'; per role {dict(bundle.config.effort.per_role)}' if bundle.config.effort.per_role else ''),
         f'- agents: {len(state.results)} run, {completed} completed, {len(state.failed_results())} failed; '
         f'commands logged: {sum(ledger_summary(bundle.ledger).values())}',
         f'- tokens: input {usage.get("input_tokens", 0)} (cached {usage.get("cached_input_tokens", 0)}), '

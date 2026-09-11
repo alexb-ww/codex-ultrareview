@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Copy this skill into ~/.agents/skills/ultrareview for people who do not want a git clone there.
+"""Copy the skill (skills/ultrareview) into ~/.agents/skills/ultrareview without the plugin system.
 
-The repository root *is* the skill: SKILL.md, agents/, scripts/, references/ and kit/
-(the driver, prompts, hooks and the CLI launcher). Nothing is downloaded and
+The skill directory holds SKILL.md, agents/, scripts/, references/ and kit/ (the driver,
+prompts, hooks and the CLI launcher). Nothing is downloaded and
 config.toml is never touched. An existing installation is kept unless --force is
 given, in which case it is moved aside with a timestamp suffix. --with-hooks writes
 kit/hooks/hooks.json to ~/.codex/hooks.json when that file does not exist yet;
@@ -19,6 +19,7 @@ import time
 from typing import Tuple
 
 SOURCE = Path(__file__).resolve().parent
+SKILL_SOURCE = SOURCE / 'skills' / 'ultrareview'
 SKILL_PARTS = ('SKILL.md', 'agents', 'scripts', 'references', 'kit')
 REQUIRED = SKILL_PARTS + ('kit/ultrareview', 'kit/prompts', 'kit/hooks', 'kit/bin', 'kit/VERSION')
 IGNORE = shutil.ignore_patterns('__pycache__', '*.pyc', '.DS_Store', '.git')
@@ -31,7 +32,7 @@ class InstallResult:
 
 
 def _check_source(source: Path) -> None:
-    missing = [part for part in REQUIRED if not (source / part).exists()]
+    missing = [part for part in REQUIRED if not (source / 'skills' / 'ultrareview' / part).exists()]
     if missing:
         raise FileNotFoundError(f'run the installer from the complete package; missing: {", ".join(missing)}')
 
@@ -56,7 +57,7 @@ def install(home: Path, source: Path = SOURCE, with_hooks: bool = False, dry_run
     if not dry_run:
         skill_dir.mkdir(parents=True)
         for part in SKILL_PARTS:
-            src = source / part
+            src = source / 'skills' / 'ultrareview' / part
             if src.is_dir():
                 shutil.copytree(src, skill_dir / part, ignore=IGNORE)
             else:
@@ -70,7 +71,7 @@ def _hooks(home: Path, source: Path, with_hooks: bool, dry_run: bool) -> Tuple[s
     if not with_hooks:
         return ()
     target = home / '.codex' / 'hooks.json'
-    snippet = (source / 'kit' / 'hooks' / 'hooks.json').read_text(encoding='utf-8')
+    snippet = (source / 'skills' / 'ultrareview' / 'kit' / 'hooks' / 'hooks.json').read_text(encoding='utf-8')
     if target.exists():
         return (f'{target} already exists; merge this snippet by hand:\n{snippet}',)
     if not dry_run:

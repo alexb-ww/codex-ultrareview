@@ -5,6 +5,9 @@ description: Deep multi-agent code review with independent verification, reprodu
 
 # Ultra Review (skill mode)
 
+Invoked as `$ultrareview` when installed as a skill, or `$ultrareview:ultrareview` when
+installed as the `ultrareview` plugin; the procedure is the same.
+
 This skill runs the same protocol as the `ultrareview` command-line driver, with one
 difference: the agents are your native sub-agents. Everything deterministic (scope,
 snapshot, briefs, clustering, gate, report) is done by the bundled program; your job is
@@ -14,7 +17,9 @@ to dispatch agents with a clean context and record their answers verbatim.
 
 `scope=branch|changes|commit|repo` (default branch), `base=<ref>`, `commit=<sha>`,
 `paths=<glob,glob>` (repo scope), `profile=fast|standard|deep` (default deep),
-`repro=auto|off|all`, `votes=<n>`, `lang=en|ru`. Anything else the user writes is a note:
+`repro=auto|off|all`, `votes=<n>`, `lang=en|ru`, `model=<name>`, `effort=<none|minimal|low|medium|high|xhigh|max>`
+(when given, pass them to every `spawn_agent` call as `model` / `reasoning_effort`; otherwise the
+sub-agents inherit the session's model and effort). Anything else the user writes is a note:
 pass it verbatim as `--note "<text>"` (the program adds it to every brief as a priority,
 never as a scope change) and relate the findings to it when you present them.
 
@@ -32,6 +37,7 @@ never as a scope change) and relate the findings to it when you present them.
    cwd). For every listed agent call `spawn_agent` with:
    - `task_name`: the agent id with dashes replaced by underscores;
    - `fork_turns`: `"none"` — mandatory; the agent must not inherit this conversation;
+   - `model` / `reasoning_effort`: only when the user passed `model=` / `effort=`;
    - `message`, exactly: `You are agent <id> in an Ultra Review. Read the brief file
      <brief_path> completely and follow it; it names the repository, the files and the
      rules. Your final message must be ONLY a JSON object matching the JSON schema in

@@ -1,0 +1,28 @@
+{
+  "name": "ultrareview",
+  "version": "0.2.0",
+  "description": "Deep multi-agent code review for Codex: independent finders, a fresh verifier per finding, reproduction in a disposable copy, a gap sweep, an independent adjudicator and an evidence gate.",
+  "author": {
+    "name": "Alex",
+    "url": "https://github.com/alexb-ww"
+  },
+  "homepage": "https://github.com/alexb-ww/codex-ultrareview",
+  "repository": "https://github.com/alexb-ww/codex-ultrareview",
+  "license": "MIT",
+  "keywords": ["code review", "ultrareview", "multi-agent", "verification", "reproduction"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Ultra Review",
+    "shortDescription": "Multi-agent code review with independent verification",
+    "longDescription": "Run $ultrareview in a repository: ten finder angles, a fresh verifier per candidate (CONFIRMED / PLAUSIBLE / REFUTED), reproduction of confirmed defects against the real code in a disposable copy, a sweep for what the first pass missed, an independent adjudicator and a deterministic gate that checks every quote and every claimed command.",
+    "developerName": "Alex",
+    "category": "Developer Tools",
+    "capabilities": ["Interactive", "Read"],
+    "websiteURL": "https://github.com/alexb-ww/codex-ultrareview",
+    "defaultPrompt": [
+      "$ultrareview scope=branch base=main",
+      "$ultrareview scope=changes profile=fast",
+      "$ultrareview commit=HEAD~1 repro=all"
+    ]
+  }
+}
