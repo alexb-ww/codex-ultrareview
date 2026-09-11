@@ -1,4 +1,17 @@
-#!/bin/sh
-# Launcher: runs the ultrareview package from this checkout with the system python3.
-HERE="$(cd "$(dirname "$0")/.." && pwd)"
-exec env PYTHONPATH="$HERE${PYTHONPATH:+:$PYTHONPATH}" python3 -m ultrareview "$@"
+#!/usr/bin/env python3
+"""CLI launcher for ultrareview; safe to symlink into ~/.local/bin.
+
+Resolves its own real location (through symlinks) and runs the package from the
+kit directory next to it with the system python3. No installation step needed.
+"""
+import os
+import sys
+
+KIT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+if KIT not in sys.path:
+    sys.path.insert(0, KIT)
+
+from ultrareview.cli import main  # noqa: E402
+
+if __name__ == '__main__':
+    sys.exit(main())
