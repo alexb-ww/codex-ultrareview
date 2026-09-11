@@ -41,6 +41,14 @@ class BriefTests(unittest.TestCase):
         self.assertIn('[redacted: do not read]', text)
         self.assertNotIn('TOKEN=abc', text)
 
+    def test_user_note_is_added_as_priority_not_scope(self) -> None:
+        noted = briefs.BriefContext(**{**self.ctx.__dict__, 'note': '  check the  auth   changes '})
+        text = briefs.finder_brief(noted, 'finder-a', angle_by_id('a-line-scan'), None)
+        self.assert_clean(text)
+        self.assertIn('User note (a priority to weigh', text)
+        self.assertIn('check the auth changes', text)
+        self.assertNotIn('User note', briefs.finder_brief(self.ctx, 'finder-a', angle_by_id('a-line-scan'), None))
+
     def test_large_diff_is_referenced_not_inlined(self) -> None:
         small = briefs.BriefContext(**{**self.ctx.__dict__, 'inline_diff_limit': 10})
         text = briefs.finder_brief(small, 'finder-a', angle_by_id('c-cross-file'), None)

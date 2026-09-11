@@ -25,3 +25,4 @@ Ground rules:
 - Do not open secret-like files (`.env*`, keys, certificates, credential stores)
   and never copy secret values into your answer.
 - Write prose fields in {{LANG_INSTRUCTION}}. Keep them concrete and short.
+{{USER_NOTE}}

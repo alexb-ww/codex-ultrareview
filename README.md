@@ -44,7 +44,10 @@ ultrareview plan --scope branch --base develop   # только план, без
 `--agent-timeout`, `--max-files/--max-lines` (по умолчанию 500/8000, как у облачного
 ultrareview), `--model`, `--effort` и `--effort-<роль>` (`finder`, `verifier`,
 `reproducer`, `adjudicator`, `mapper`, `triage`, `sweep`), `--lang en|ru` (язык текстов
-агентов), `--keep-sessions`, `--keep-worktree`, `--no-preamble`, `--run-dir`.
+агентов), `--note "<текст>"` (приоритет для агентов, не сужение области),
+`--repro-sandbox workspace-write|danger-full-access` (второе нужно Go-проектам, чтобы
+`go test` видел системный GOCACHE), `--keep-sessions`, `--keep-worktree`,
+`--no-preamble`, `--run-dir`.
 
 Модель и effort по умолчанию наследуются из `~/.codex/config.toml`. Каждый агент — свой
 `codex exec --ephemeral --json --output-schema -o`, stdin закрыт, брифы и события лежат

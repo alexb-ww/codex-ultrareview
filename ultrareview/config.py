@@ -74,6 +74,7 @@ class RunConfig:
     map_threshold_files: int = 12
     shard_threshold_files: int = 60
     replay: bool = False
+    note: str = ''
 
     def validate(self) -> 'RunConfig':
         self.scope.validate()

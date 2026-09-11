@@ -26,6 +26,15 @@ class BriefContext:
     inline_diff_limit: int = 64 * 1024
     max_candidates: int = 8
     max_findings: int = 15
+    note: str = ''
+
+
+def user_note(note: str) -> str:
+    text = ' '.join(note.split())
+    if not text:
+        return ''
+    return ('\nUser note (a priority to weigh, never a restriction of the scope or a finding to '
+            f'confirm): {text}\n')
 
 
 def scope_summary(scope: ResolvedScope) -> str:
@@ -98,7 +107,7 @@ def header(ctx: BriefContext, role: str, agent_id: str, marker: str) -> str:
     common = render(load_template('common.md'), {
         'PREAMBLE': ctx.preamble or '', 'ROLE': role, 'AGENT_ID': agent_id, 'RUN_ID': ctx.run_id,
         'REPO_ROOT': ctx.repo_root, 'SCOPE_SUMMARY': scope_summary(ctx.scope),
-        'LANG_INSTRUCTION': LANG_TEXT.get(ctx.lang, 'English'),
+        'LANG_INSTRUCTION': LANG_TEXT.get(ctx.lang, 'English'), 'USER_NOTE': user_note(ctx.note),
     })
     return f'{common.strip()}\nMARKER: {marker}\n\n'
 

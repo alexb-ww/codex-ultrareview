@@ -54,6 +54,7 @@ def add_run_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument('--max-files', type=int, default=500)
     parser.add_argument('--max-lines', type=int, default=8000)
     parser.add_argument('--lang', choices=LANGUAGES, default='en')
+    parser.add_argument('--note', default='', help='free-text note from the user; a priority for the agents, not a scope change')
     parser.add_argument('--no-preamble', action='store_true')
     parser.add_argument('--keep-sessions', action='store_true')
     parser.add_argument('--keep-worktree', action='store_true')
@@ -75,7 +76,7 @@ def config_from_args(args: argparse.Namespace) -> RunConfig:
     run_dir = Path(args.run_dir).expanduser() if args.run_dir else default_run_dir(repo)
     return RunConfig(repo=repo, scope=scope, run_dir=run_dir, profile=args.profile, jobs=args.jobs,
                      agent_timeout=args.agent_timeout, votes=args.votes, repro=args.repro, max_repro=args.max_repro,
-                     repro_sandbox=args.repro_sandbox,
+                     repro_sandbox=args.repro_sandbox, note=args.note or '',
                      max_findings=args.max_findings, lang=args.lang,
                      preamble=None if args.no_preamble else DEFAULT_PREAMBLE, keep_sessions=args.keep_sessions,
                      keep_worktree=args.keep_worktree, dry_run=args.dry_run or args.command == 'plan',

@@ -21,6 +21,10 @@ New implementation, replaces the 0.1.0 prototype.
 - Skill mode: `step` replays recorded outputs and prints the next batch; the coordinator
   spawns sub-agents with `fork_turns: "none"`; commands are not authenticated there and
   the report says so.
+- Skill helpers: `record` stores a sub-agent's final JSON after validating it against
+  that agent's schema; `--note` passes the user's free text to every brief as a
+  priority; `--repro-sandbox danger-full-access` lets reproducers use system build
+  caches (needed for Go under the no-private-caches rule).
 - Hooks: optional PreToolUse guard denying edits while a review marker exists.
 - Corpus and scorer: `corpus/build.py`, `scripts/eval_corpus.py`.
 - Tests: 130+ unit and integration tests against a fake `codex` binary; coverage above

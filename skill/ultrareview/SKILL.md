@@ -15,7 +15,8 @@ to dispatch agents with a clean context and record their answers verbatim.
 `scope=branch|changes|commit|repo` (default branch), `base=<ref>`, `commit=<sha>`,
 `paths=<glob,glob>` (repo scope), `profile=fast|standard|deep` (default deep),
 `repro=auto|off|all`, `votes=<n>`, `lang=en|ru`. Anything else the user writes is a note:
-relate the findings to it when you present them; do not put it into agent messages.
+pass it verbatim as `--note "<text>"` (the program adds it to every brief as a priority,
+never as a scope change) and relate the findings to it when you present them.
 
 ## Procedure
 

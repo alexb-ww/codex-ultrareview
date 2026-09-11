@@ -99,7 +99,8 @@ def prepare(config: RunConfig, emit: Emitter = stderr_emitter, reuse_snapshot: b
     run_id = run_dir.name
     ctx = BriefContext(run_id=run_id, repo_root=str(repo), scope=scope, snapshot=snapshot, diff_path=str(diff_path),
                        lang=config.lang, preamble=config.preamble, inline_diff_limit=config.inline_diff_limit,
-                       max_candidates=config.max_candidates_per_angle, max_findings=config.max_findings)
+                       max_candidates=config.max_candidates_per_angle, max_findings=config.max_findings,
+                       note=config.note)
     return Prepared(config=config, scope=scope, snapshot=snapshot, ctx=ctx, run_id=run_id, codex_version=version)
 
 
@@ -191,7 +192,8 @@ def _config_payload(config: RunConfig) -> dict:
     return {'scope': config.scope.__dict__, 'profile': config.profile, 'votes': config.votes, 'repro': config.repro,
             'max_repro': config.max_repro, 'max_findings': config.max_findings, 'lang': config.lang,
             'preamble': config.preamble, 'limits': config.limits.__dict__, 'jobs': config.jobs,
-            'agent_timeout': config.agent_timeout, 'max_candidates_per_angle': config.max_candidates_per_angle}
+            'agent_timeout': config.agent_timeout, 'max_candidates_per_angle': config.max_candidates_per_angle,
+            'note': config.note}
 
 
 def _restore_config(config: RunConfig, payload: dict) -> RunConfig:
@@ -204,7 +206,8 @@ def _restore_config(config: RunConfig, payload: dict) -> RunConfig:
                    max_findings=payload.get('max_findings', config.max_findings), lang=payload.get('lang', config.lang),
                    preamble=payload.get('preamble', config.preamble),
                    limits=Limits(**payload.get('limits', config.limits.__dict__)),
-                   max_candidates_per_angle=payload.get('max_candidates_per_angle', config.max_candidates_per_angle))
+                   max_candidates_per_angle=payload.get('max_candidates_per_angle', config.max_candidates_per_angle),
+                   note=str(payload.get('note', config.note) or ''))
 
 
 def _remove_step_worktrees(repo: Path, run_dir: Path) -> tuple:
