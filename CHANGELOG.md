@@ -29,5 +29,18 @@ New implementation, replaces the 0.1.0 prototype.
   (`state.patch`), so edits made during the review do not leak into reproduction.
 - Hooks: optional PreToolUse guard denying edits while a review marker exists.
 - Corpus and scorer: `corpus/build.py`, `scripts/eval_corpus.py`.
-- Tests: 130+ unit and integration tests against a fake `codex` binary; coverage above
-  90 % of the package.
+- Closed after an independent Codex review of the build: content filters are blanked on
+  every git call (`status` included) and pathspecs are literal; every file read walks the
+  path with `O_NOFOLLOW` so a symlinked directory cannot redirect a read; the worktree
+  patch goes to `git apply` over stdin; `.env*` means every name starting with `.env`;
+  the staged (index) diff is redacted like the main diff and counted against the limits;
+  `changes` scope records HEAD as its base so deleted code stays quotable; the gate checks
+  the evidence of every verdict (a refutation whose evidence fails is set aside instead of
+  burying the bug), binds a reproduction to the logged exit code, accepts no finding with
+  evidence problems and never reports `complete` with them; command claims must equal a
+  logged command or one of its `&&`/`;` segments, quotes must equal the line; the sweep
+  attaches a candidate only to a surviving finding of the same category; the installed
+  hook path is correct and `step` maintains the guard marker; when a sandbox refuses
+  `git worktree add`, reproduction copies fall back to a plain `git archive` copy.
+- Tests: 150+ unit and integration tests against a fake `codex` binary; coverage 93 % of
+  the package.
