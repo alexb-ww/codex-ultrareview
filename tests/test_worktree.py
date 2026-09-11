@@ -5,7 +5,7 @@ import unittest
 from tests.helpers import seeded_repo
 from ultrareview.errors import GitError
 from ultrareview.scope import ScopeSpec, resolve_scope
-from ultrareview.worktree import create_worktree_copy, remove_worktree_copy
+from ultrareview.worktree import capture_state_patch, create_worktree_copy, remove_worktree_copy
 
 
 class WorktreeCopyTests(unittest.TestCase):
@@ -37,6 +37,20 @@ class WorktreeCopyTests(unittest.TestCase):
             remove_worktree_copy(copy)
         self.assertFalse(copy.path.exists())
         self.assertNotIn('wt', self.repo.git('worktree', 'list'))
+
+    def test_captured_patch_wins_over_later_edits(self) -> None:
+        scope = resolve_scope(self.repo.path, ScopeSpec(kind='branch', base='main'))
+        patch_path = self.repo.parent / 'state.patch'
+        self.assertTrue(capture_state_patch(self.repo.path, scope, patch_path))
+        self.repo.write('src/util.py', 'def clamp(x, lo, hi):\n    return EDITED_LATER\n')
+        copy = create_worktree_copy(self.repo.path, scope, self.repo.parent / 'wt-patch', patch_path=patch_path)
+        try:
+            self.assertEqual((copy.path / 'src/util.py').read_text(), 'def clamp(x, lo, hi):\n    return min(x, hi)\n')
+        finally:
+            remove_worktree_copy(copy)
+        head = self.repo.git('rev-parse', 'HEAD')
+        commit_scope = resolve_scope(self.repo.path, ScopeSpec(kind='commit', commit=head))
+        self.assertFalse(capture_state_patch(self.repo.path, commit_scope, self.repo.parent / 'empty.patch'))
 
     def test_commit_scope_copy_is_that_commit(self) -> None:
         head = self.repo.git('rev-parse', 'HEAD')

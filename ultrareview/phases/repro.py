@@ -62,8 +62,10 @@ def _prepare_copies(rt: Runtime, selected: Sequence[Finding]) -> Tuple[Dict[str,
     notes: List[str] = []
     base = rt.config.run_dir / 'worktrees'
     for finding in selected:
+        patch_path = rt.config.run_dir / 'state.patch'
         try:
-            copy = create_worktree_copy(rt.config.repo, rt.ctx.scope, base / finding.id, reuse=rt.config.replay)
+            copy = create_worktree_copy(rt.config.repo, rt.ctx.scope, base / finding.id, reuse=rt.config.replay,
+                                        patch_path=patch_path if patch_path.is_file() else None)
         except GitError as exc:
             notes.append(f'reproduction of {finding.id} skipped: {exc}')
             continue

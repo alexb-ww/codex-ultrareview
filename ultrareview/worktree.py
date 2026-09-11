@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 import shutil
-from typing import Tuple
+from typing import Optional, Tuple
 
 from .errors import GitError
 from .gitio import run_git
@@ -22,19 +22,34 @@ class WorktreeCopy:
     notes: Tuple[str, ...]
 
 
-def _apply_working_tree_diff(repo: Path, copy: Path, base_rev: str) -> Tuple[bool, Tuple[str, ...]]:
-    patch = run_git(repo, 'diff', '--no-renames', '--binary', base_rev, '--', allow_fail=True)
+def capture_state_patch(repo: Path, scope: ResolvedScope, destination: Path) -> bool:
+    """Save the working-tree diff against HEAD at snapshot time; returns True when non-empty."""
+    if scope.kind == 'commit' or scope.head is None:
+        destination.write_bytes(b'')
+        return False
+    patch = run_git(repo, 'diff', '--no-renames', '--binary', scope.head, '--', allow_fail=True)
+    destination.write_bytes(patch)
+    return bool(patch.strip())
+
+
+def _apply_patch(repo: Path, copy: Path, base_rev: str, patch_path: Optional[Path]) -> Tuple[bool, Tuple[str, ...]]:
+    if patch_path is not None and patch_path.is_file():
+        patch = patch_path.read_bytes()
+        source = f'captured patch {patch_path.name}'
+    else:
+        patch = run_git(repo, 'diff', '--no-renames', '--binary', base_rev, '--', allow_fail=True)
+        source = 'live working-tree diff'
     if not patch.strip():
         return False, ()
-    patch_path = copy / '.ultrareview-state.patch'
-    patch_path.write_bytes(patch)
+    temp = copy / '.ultrareview-state.patch'
+    temp.write_bytes(patch)
     try:
-        run_git(copy, 'apply', '--whitespace=nowarn', str(patch_path))
+        run_git(copy, 'apply', '--whitespace=nowarn', str(temp))
     except GitError as exc:
-        return False, (f'could not apply working-tree diff to the copy: {exc}',)
+        return False, (f'could not apply the {source} to the copy: {exc}',)
     finally:
         try:
-            patch_path.unlink()
+            temp.unlink()
         except OSError:
             pass
     return True, ()
@@ -60,13 +75,14 @@ def _copy_untracked(repo: Path, copy: Path, scope: ResolvedScope) -> Tuple[Tuple
     return tuple(copied), tuple(notes)
 
 
-def create_worktree_copy(repo: Path, scope: ResolvedScope, destination: Path, reuse: bool = False) -> WorktreeCopy:
+def create_worktree_copy(repo: Path, scope: ResolvedScope, destination: Path, reuse: bool = False,
+                         patch_path: Optional[Path] = None) -> WorktreeCopy:
     """Create a detached worktree at ``destination`` that mirrors the reviewed state.
 
-    For branch/changes scopes the copy is HEAD plus the working-tree diff plus
-    untracked target files. For commit scope it is that commit. Repo scope mirrors
-    HEAD plus the working tree the same way as changes. With ``reuse`` an existing
-    destination (from an earlier step) is returned as is.
+    For branch/changes scopes the copy is HEAD plus the working-tree diff (the patch
+    captured at snapshot time when ``patch_path`` is given, so later edits do not leak
+    into reproduction) plus untracked target files. For commit scope it is that commit.
+    With ``reuse`` an existing destination (from an earlier step) is returned as is.
     """
     if scope.head is None and scope.kind != 'changes':
         raise GitError('cannot create a worktree copy without a HEAD commit')
@@ -85,7 +101,7 @@ def create_worktree_copy(repo: Path, scope: ResolvedScope, destination: Path, re
     applied = False
     copied: Tuple[str, ...] = ()
     if scope.kind != 'commit':
-        applied, apply_notes = _apply_working_tree_diff(repo, destination, checkout)
+        applied, apply_notes = _apply_patch(repo, destination, checkout, patch_path)
         copied, copy_notes = _copy_untracked(repo, destination, scope)
         notes = apply_notes + copy_notes
     return WorktreeCopy(path=destination, repo=repo, applied_diff=applied, copied_untracked=copied, notes=notes)

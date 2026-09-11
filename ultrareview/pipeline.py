@@ -30,6 +30,7 @@ from .scope import ResolvedScope, check_limits, resolve_scope
 from .replay import AgentsNeeded, pending_from_specs, pending_instructions, replay_agent, write_pending
 from .snapshot import Snapshot, SnapshotReader, detect_drift, snapshot_from_dict, snapshot_to_dict, take_snapshot
 from .state import ReviewState, save_state
+from .worktree import capture_state_patch
 
 CONFIG_FILE = 'config.json'
 EXIT_AGENTS_NEEDED = 4
@@ -93,6 +94,9 @@ def prepare(config: RunConfig, emit: Emitter = stderr_emitter, reuse_snapshot: b
         raise LimitExceeded(violation.describe())
     run_dir.mkdir(parents=True, exist_ok=True)
     snapshot = _load_or_take_snapshot(run_dir, repo, scope, reuse_snapshot)
+    state_patch = run_dir / 'state.patch'
+    if not (reuse_snapshot and state_patch.exists()):
+        capture_state_patch(repo, scope, state_patch)
     diff_path = run_dir / 'diff.patch'
     diff_path.write_text(scope.diff_text + (('\n\n# index versions\n' + scope.index_diff_text) if scope.index_diff_text else ''),
                          encoding='utf-8')

@@ -25,6 +25,8 @@ New implementation, replaces the 0.1.0 prototype.
   that agent's schema; `--note` passes the user's free text to every brief as a
   priority; `--repro-sandbox danger-full-access` lets reproducers use system build
   caches (needed for Go under the no-private-caches rule).
+- Reproduction copies are built from the working-tree patch captured at snapshot time
+  (`state.patch`), so edits made during the review do not leak into reproduction.
 - Hooks: optional PreToolUse guard denying edits while a review marker exists.
 - Corpus and scorer: `corpus/build.py`, `scripts/eval_corpus.py`.
 - Tests: 130+ unit and integration tests against a fake `codex` binary; coverage above
