@@ -1,0 +1,19 @@
+{
+  "case": "python-svc",
+  "description": "Money-code request service; the feature branch plants five defects and one harmless refactor.",
+  "defects": [
+    {"id": "B1", "file": "svc/service.py", "line": 41, "keywords": ["limit - 1", "off-by-one", "pagination", "one fewer", "drops the last"],
+     "summary": "list_page slices offset:offset+limit-1 and returns one item fewer than requested", "severity": "P2"},
+    {"id": "B2", "file": "svc/service.py", "line": 20, "keywords": ["amount_cents <= 0", "negative", "zero amount", "non-positive", "lower bound"],
+     "summary": "the amount lower-bound guard was removed; zero and negative amounts are accepted", "severity": "P1"},
+    {"id": "B3", "file": "svc/service.py", "line": 22, "keywords": ["idempotency", "company", "tenant", "cross-tenant", "another company"],
+     "summary": "idempotency key lookup lost the company scope; a replay from another company returns that company's request", "severity": "P0"},
+    {"id": "B4", "file": "svc/service.py", "line": 34, "keywords": ["not request.discount_percent", "falsy", "zero", "0%", "discount"],
+     "summary": "a discount of 0 is treated as missing and replaced by the 10% default", "severity": "P2"},
+    {"id": "B5", "file": "svc/api.py", "line": 34, "keywords": ["driver_id", "payload", "cancel", "other driver", "authorization"],
+     "summary": "handle_cancel takes driver_id from the payload, so a caller can cancel another driver's request", "severity": "P1"}
+  ],
+  "decoys": [
+    {"id": "D1", "file": "svc/service.py", "line": 44, "summary": "_assert_pending refactor is behaviour-preserving"}
+  ]
+}

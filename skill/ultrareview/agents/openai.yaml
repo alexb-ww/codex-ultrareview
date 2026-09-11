@@ -1,0 +1,7 @@
+interface:
+  display_name: "Ultra Review"
+  short_description: "Multi-agent review with independent verification, reproduction and an evidence gate"
+  default_prompt: "$ultrareview scope=branch profile=deep"
+
+policy:
+  allow_implicit_invocation: false

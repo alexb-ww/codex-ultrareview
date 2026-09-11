@@ -1,0 +1,143 @@
+#!/usr/bin/env python3
+"""A stand-in for the ``codex`` binary used by the integration tests.
+
+It understands the ``codex exec`` flags the driver passes, reads the brief from
+stdin, detects the role and marker from the brief's header lines, looks up a
+scenario and then emits realistic JSONL events on stdout and a schema-shaped
+JSON document to the ``-o`` file.
+
+Scenario file (``FAKE_CODEX_SCENARIO``): a JSON object whose keys are
+``"<role>"`` or ``"<role>:<marker>"``; the most specific key wins. Each value:
+``{"output": {...}, "commands": [{"command": "...", "exit_code": 0,
+"output": "..."}], "sleep": 0, "mode": "ok|invalid_json|no_output|crash"}``.
+Every invocation is appended to ``FAKE_CODEX_LOG`` as one JSON line.
+"""
+from __future__ import annotations
+
+import json
+import os
+import re
+import sys
+import time
+
+ROLE_LINE = re.compile(r'^ROLE:\s*(\S+)', re.MULTILINE)
+MARKER_LINE = re.compile(r'^MARKER:\s*(\S+)', re.MULTILINE)
+AGENT_LINE = re.compile(r'^AGENT_ID:\s*(\S+)', re.MULTILINE)
+
+DEFAULT_OUTPUTS = {
+    'mapper': {'modules': [], 'entry_points': [], 'trust_boundaries': [], 'storages': [],
+               'external_contracts': [], 'critical_flows': [], 'test_stack': 'unknown', 'unknowns': []},
+    'finder': {'candidates': [], 'files_read': [], 'coverage_note': 'nothing found'},
+    'sweep': {'candidates': [], 'files_read': [], 'coverage_note': 'nothing new'},
+    'triage': {'clusters': []},
+    'verifier': {'verdict': 'REFUTED', 'severity': 'P3', 'origin': 'unknown', 'trigger': '',
+                 'reasoning': 'default', 'counterevidence_checked': [], 'quotes': [],
+                 'what_would_confirm': '', 'fix': '', 'regression_test': '', 'commands_run': []},
+    'reproducer': {'result': 'blocked', 'command': '', 'cwd': '', 'exit_code': 0, 'output_excerpt': '',
+                   'explanation': '', 'test_file': '', 'blocked_reason': 'no scenario', 'commands_run': []},
+    'adjudicator': {'decisions': [], 'coverage_gaps': [], 'new_suspicions': [], 'summary': 'default'},
+}
+
+
+def parse_args(argv):
+    opts = {'output': None, 'schema': None, 'cwd': None, 'sandbox': None, 'prompt': None,
+            'flags': [], 'config': [], 'model': None}
+    i = 0
+    while i < len(argv):
+        arg = argv[i]
+        nxt = argv[i + 1] if i + 1 < len(argv) else None
+        if arg in ('-o', '--output-last-message'):
+            opts['output'] = nxt; i += 2
+        elif arg == '--output-schema':
+            opts['schema'] = nxt; i += 2
+        elif arg == '-C':
+            opts['cwd'] = nxt; i += 2
+        elif arg in ('-s', '--sandbox'):
+            opts['sandbox'] = nxt; i += 2
+        elif arg == '-c':
+            opts['config'].append(nxt); i += 2
+        elif arg in ('-m', '--model'):
+            opts['model'] = nxt; i += 2
+        elif arg.startswith('-'):
+            opts['flags'].append(arg); i += 1
+        else:
+            opts['prompt'] = arg; i += 1
+    return opts
+
+
+def load_scenarios():
+    path = os.environ.get('FAKE_CODEX_SCENARIO')
+    if not path:
+        return {}
+    with open(path, 'r', encoding='utf-8') as handle:
+        return json.load(handle)
+
+
+def pick(scenarios, role, marker):
+    for key in (f'{role}:{marker}', role):
+        if key in scenarios:
+            return scenarios[key]
+    return {}
+
+
+def emit(event):
+    sys.stdout.write(json.dumps(event) + '\n')
+    sys.stdout.flush()
+
+
+def main():
+    argv = sys.argv[1:]
+    if argv and argv[0] == '--version':
+        sys.stdout.write('codex-cli 0.0.0-fake\n')
+        return 0
+    if not argv or argv[0] != 'exec':
+        sys.stderr.write('fake codex only supports exec\n')
+        return 2
+    opts = parse_args(argv[1:])
+    brief = sys.stdin.read() if opts['prompt'] in (None, '-') else opts['prompt']
+    role = (ROLE_LINE.search(brief) or [None, 'unknown'])[1]
+    marker = (MARKER_LINE.search(brief) or [None, ''])[1]
+    agent_id = (AGENT_LINE.search(brief) or [None, ''])[1]
+    scenario = pick(load_scenarios(), role, marker)
+    log_path = os.environ.get('FAKE_CODEX_LOG')
+    if log_path:
+        with open(log_path, 'a', encoding='utf-8') as handle:
+            handle.write(json.dumps({'role': role, 'marker': marker, 'agent_id': agent_id, 'argv': argv,
+                                     'cwd': opts['cwd'], 'sandbox': opts['sandbox'], 'flags': opts['flags'],
+                                     'config': opts['config'], 'model': opts['model'],
+                                     'brief_length': len(brief)}) + '\n')
+    time.sleep(float(scenario.get('sleep', 0)))
+    write_file = scenario.get('write_file')
+    if isinstance(write_file, dict) and opts['cwd']:
+        target = os.path.join(opts['cwd'], write_file['path'])
+        with open(target, 'w', encoding='utf-8') as handle:
+            handle.write(write_file.get('text', ''))
+    mode = scenario.get('mode', 'ok')
+    if mode == 'crash':
+        sys.stderr.write('fake codex crashed on purpose\n')
+        return 1
+    emit({'type': 'thread.started', 'thread_id': f'fake-{role}-{agent_id or "x"}'})
+    emit({'type': 'turn.started'})
+    for index, command in enumerate(scenario.get('commands', []), start=1):
+        item = {'id': f'item_{index}', 'type': 'command_execution',
+                'command': f"/bin/zsh -lc {json.dumps(command['command'])}",
+                'aggregated_output': '', 'exit_code': None, 'status': 'in_progress'}
+        emit({'type': 'item.started', 'item': item})
+        done = dict(item, aggregated_output=command.get('output', ''), exit_code=command.get('exit_code', 0),
+                    status='completed')
+        emit({'type': 'item.completed', 'item': done})
+    output = scenario.get('output', DEFAULT_OUTPUTS.get(role, {}))
+    text = json.dumps(output)
+    if mode == 'invalid_json':
+        text = '{not json'
+    emit({'type': 'item.completed', 'item': {'id': 'item_final', 'type': 'agent_message', 'text': text}})
+    emit({'type': 'turn.completed', 'usage': {'input_tokens': 1000, 'cached_input_tokens': 200,
+                                              'output_tokens': 50, 'reasoning_output_tokens': 10}})
+    if mode != 'no_output' and opts['output']:
+        with open(opts['output'], 'w', encoding='utf-8') as handle:
+            handle.write(text)
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

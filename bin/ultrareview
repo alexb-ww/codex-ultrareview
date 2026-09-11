@@ -1,0 +1,4 @@
+#!/bin/sh
+# Launcher: runs the ultrareview package from this checkout with the system python3.
+HERE="$(cd "$(dirname "$0")/.." && pwd)"
+exec env PYTHONPATH="$HERE${PYTHONPATH:+:$PYTHONPATH}" python3 -m ultrareview "$@"
