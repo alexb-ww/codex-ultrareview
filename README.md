@@ -12,7 +12,7 @@ verifier на каждую находку, воспроизведение в о�
 ## Установка для команды (одна минута)
 
 ```bash
-git clone <url-этого-репозитория> ~/.agents/skills/ultrareview
+git clone https://github.com/alexb-ww/codex-ultrareview.git ~/.agents/skills/ultrareview
 ln -sf ~/.agents/skills/ultrareview/kit/bin/ultrareview ~/.local/bin/ultrareview   # CLI, по желанию
 ```
 
