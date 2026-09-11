@@ -9,6 +9,7 @@ from typing import Dict, Iterable, Optional, Tuple
 from .errors import ScopeError
 from .exclusions import classify_path
 from .gitio import decode_nul, git_text, rev_parse, run_git
+from .safe_read import SafeReadError, read_regular_beneath
 
 SCOPE_KINDS = ('branch', 'changes', 'commit', 'repo')
 DIFF_SCOPES = ('branch', 'changes', 'commit')
@@ -118,8 +119,9 @@ def _name_status(repo: Path, *revisions: str, cached: bool = False) -> Dict[str,
     return {path: status[:1] for status, path in pairs}
 
 
-def _numstat(repo: Path, *revisions: str) -> Dict[str, int]:
-    out = run_git(repo, 'diff', '--no-renames', '--numstat', '-z', *revisions, '--').decode('utf-8', 'replace')
+def _numstat(repo: Path, *revisions: str, cached: bool = False) -> Dict[str, int]:
+    extra = ('--cached',) if cached else ()
+    out = run_git(repo, 'diff', '--no-renames', '--numstat', '-z', *extra, *revisions, '--').decode('utf-8', 'replace')
     counts: Dict[str, int] = {}
     for record in out.split('\0'):
         parts = record.split('\t')
@@ -140,12 +142,9 @@ def _is_directory_entry(repo: Path, path: str) -> bool:
 
 
 def _untracked_bytes(repo: Path, path: str) -> Optional[bytes]:
-    full = repo / path
     try:
-        if full.is_symlink() or not full.is_file() or full.stat().st_size > MAX_INLINE_UNTRACKED:
-            return None
-        return full.read_bytes()
-    except OSError:
+        return read_regular_beneath(repo, path, MAX_INLINE_UNTRACKED)
+    except SafeReadError:
         return None
 
 
@@ -175,6 +174,9 @@ def _diff_scope_targets(repo: Path, kind: str, new_rev: str, base_rev: str,
     statuses = _name_status(repo, base_rev, new_rev) if kind == 'commit' else _name_status(repo, base_rev)
     numbers = _numstat(repo, base_rev, new_rev) if kind == 'commit' else _numstat(repo, base_rev)
     index_set = set(index_paths)
+    if index_set:
+        staged_numbers = _numstat(repo, base_rev, cached=True)
+        numbers = {**numbers, **{p: max(numbers.get(p, 0), staged_numbers.get(p, 0)) for p in index_set}}
     reviewed_version = 'commit' if kind == 'commit' else 'worktree'
     targets = []
     skipped = []
@@ -197,7 +199,7 @@ def _diff_scope_targets(repo: Path, kind: str, new_rev: str, base_rev: str,
         cls = classify_path(path, kind, repo)
         if cls.status == 'target':
             targets.append(Target(path=path, status='modified', versions=('worktree', 'index', 'base'),
-                                  redacted=cls.redacted))
+                                  redacted=cls.redacted, lines_changed=numbers.get(path, 0)))
     for path in sorted(untracked):
         cls = classify_path(path, kind, repo)
         if cls.status == 'skipped':
@@ -222,16 +224,25 @@ def _compose_diff(repo: Path, kind: str, base_rev: str, new_rev: str,
     return ''.join(chunk for chunk in chunks if chunk)
 
 
-def _index_overlap(repo: Path, head: Optional[str]) -> Tuple[Tuple[str, ...], str]:
+def _index_overlap(repo: Path, head: Optional[str]) -> Tuple[str, ...]:
+    """Paths whose index version differs from both HEAD and the working tree."""
     if head is None:
-        return (), ''
+        return ()
     staged = set(_name_status(repo, head, cached=True))
     unstaged = set(_name_status(repo))
-    overlap = tuple(sorted(staged & unstaged))
-    if not overlap:
-        return (), ''
-    text = run_git(repo, 'diff', '--no-renames', '--cached', head, '--', *overlap).decode('utf-8', 'replace')
-    return overlap, text
+    return tuple(sorted(staged & unstaged))
+
+
+def _index_diff(repo: Path, head: Optional[str], targets: Tuple[Target, ...]) -> str:
+    """The staged diff of overlap paths, with redacted paths withheld like the main diff."""
+    paths = [t.path for t in targets if 'index' in t.versions and not t.redacted]
+    withheld = [t.path for t in targets if 'index' in t.versions and t.redacted]
+    if head is None or not (paths or withheld):
+        return ''
+    text = run_git(repo, 'diff', '--no-renames', '--cached', head, '--', *paths).decode('utf-8', 'replace') if paths else ''
+    if withheld:
+        text += '\n'.join(f'# redacted: {p} has a staged version; content withheld (secret-like path)' for p in withheld) + '\n'
+    return text
 
 
 def _resolve_branch(repo: Path, spec: ScopeSpec, head: str) -> Tuple[str, str, str, str]:
@@ -273,10 +284,13 @@ def _resolve_diff_scope(repo: Path, spec: ScopeSpec) -> ResolvedScope:
         base_rev, new_rev = (head or EMPTY_TREE), (head or EMPTY_TREE)
         if head is None:
             notes += ('unborn repository: every file counts as added',)
+        else:
+            base_ref, source, base_commit = 'HEAD', 'HEAD', head
     untracked = () if spec.kind == 'commit' else _untracked(repo)
-    index_paths, index_diff = ((), '') if spec.kind == 'commit' else _index_overlap(repo, head)
+    index_paths = () if spec.kind == 'commit' else _index_overlap(repo, head)
     targets, skipped = _diff_scope_targets(repo, spec.kind, new_rev, base_rev, untracked, index_paths)
     diff_text = _compose_diff(repo, spec.kind, base_rev, new_rev, targets)
+    index_diff = '' if spec.kind == 'commit' else _index_diff(repo, head, targets)
     if index_paths:
         notes += (f'index and working tree both differ for: {", ".join(index_paths)}',)
     changed_lines = sum(t.lines_changed for t in targets)

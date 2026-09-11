@@ -67,19 +67,26 @@ def diff_section(ctx: BriefContext) -> str:
     if scope.kind == 'repo':
         return ('## Diff\n\nNo diff: this is a whole-repository review of the files listed above. '
                 'Read them directly.')
-    if not scope.diff_text:
+    if not scope.diff_text and not scope.index_diff_text:
         return '## Diff\n\n(the diff is empty)'
     header = '## Diff\n\n'
     base_hint = f'Read the base version of a file with `git show {scope.diff_base}:<path>`.\n\n' if scope.diff_base else ''
-    if len(scope.diff_text.encode('utf-8')) <= ctx.inline_diff_limit:
+    total = len(scope.diff_text.encode('utf-8')) + len(scope.index_diff_text.encode('utf-8'))
+    inline = total <= ctx.inline_diff_limit
+    if not scope.diff_text:
+        body = 'The working tree matches the base; the change lives only in the index (staged) version below.\n'
+    elif inline:
         body = f'```diff\n{scope.diff_text}\n```\n'
     else:
         body = (f'The unified diff is {len(scope.diff_text)} characters, too large to inline. '
                 f'Read it from `{ctx.diff_path}` (plain text) with `sed -n` in slices.\n')
     index_part = ''
-    if scope.index_diff_text:
+    if scope.index_diff_text and inline:
         index_part = ('\n### Index (staged) version of files whose working tree also differs\n\n'
                       f'```diff\n{scope.index_diff_text}\n```\n')
+    elif scope.index_diff_text:
+        index_part = (f'\nSome files also have a staged (index) version that differs; it is appended to '
+                      f'`{ctx.diff_path}` under "# index versions" and readable with `git show :<path>`.\n')
     return header + base_hint + body + index_part
 
 

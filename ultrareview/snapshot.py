@@ -4,7 +4,6 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 import hashlib
 import json
-import os
 from pathlib import Path
 import stat
 import time
@@ -12,6 +11,7 @@ from typing import Dict, Optional, Tuple
 
 from .errors import GitError
 from .gitio import run_git
+from .safe_read import SafeReadError, read_regular_beneath, stat_beneath
 from .scope import ResolvedScope
 
 MAX_CONTENT = 16 * 1024 * 1024
@@ -65,13 +65,16 @@ def count_lines(data: bytes) -> int:
 
 
 def _read_worktree(repo: Path, path: str) -> Tuple[Optional[bytes], str, Optional[str]]:
-    full = repo.joinpath(*path.split('/'))
+    """Read a working-tree file without following any symlink on the way."""
     try:
-        info = full.lstat()
-    except FileNotFoundError:
-        return None, 'missing', None
-    except OSError as exc:
-        return None, 'unreadable', exc.__class__.__name__
+        info = stat_beneath(repo, path)
+    except SafeReadError as exc:
+        reason = str(exc)
+        if 'FileNotFoundError' in reason:
+            return None, 'missing', None
+        if 'NotADirectoryError' in reason or 'ELOOP' in reason or ' at ' in reason:
+            return None, 'symlink', f'ancestor is not a plain directory ({reason})'
+        return None, 'unreadable', reason
     if stat.S_ISLNK(info.st_mode):
         return None, 'symlink', 'symlink target not followed'
     if not stat.S_ISREG(info.st_mode):
@@ -79,14 +82,9 @@ def _read_worktree(repo: Path, path: str) -> Tuple[Optional[bytes], str, Optiona
     if info.st_size > MAX_CONTENT:
         return None, 'large', f'{info.st_size} bytes exceeds 16 MiB'
     try:
-        fd = os.open(full, os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0))
-        with os.fdopen(fd, 'rb') as handle:
-            data = handle.read(MAX_CONTENT + 1)
-    except OSError as exc:
-        return None, 'unreadable', exc.__class__.__name__
-    if len(data) > MAX_CONTENT:
-        return None, 'large', 'grew past 16 MiB while reading'
-    return data, 'file', None
+        return read_regular_beneath(repo, path, MAX_CONTENT), 'file', None
+    except SafeReadError as exc:
+        return None, 'unreadable', str(exc)
 
 
 def _revision_for(version: str, snapshot_like: Dict[str, Optional[str]]) -> Optional[str]:

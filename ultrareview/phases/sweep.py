@@ -29,11 +29,18 @@ def _touches(candidate: Candidate, finding: Finding) -> bool:
 
 
 def attach_to_existing(candidates: Sequence[Candidate], findings: Sequence[Finding]) -> Tuple[Tuple[Finding, ...], Tuple[Candidate, ...]]:
+    """Attach a sweep candidate only to a finding that survived verification and names the same cause.
+
+    Proximity alone is not identity: a candidate near a refuted or unverified finding, or
+    one with a different category, is a fresh candidate and gets its own verifier.
+    """
     updated = list(findings)
     fresh: List[Candidate] = []
     for candidate in candidates:
         for index, finding in enumerate(updated):
-            if _touches(candidate, finding):
+            same_cause = finding.verdict in ('CONFIRMED', 'PLAUSIBLE') and _touches(candidate, finding) \
+                and candidate.category == finding.candidate.category
+            if same_cause:
                 updated[index] = replace(finding, members=finding.members + (candidate,))
                 break
         else:

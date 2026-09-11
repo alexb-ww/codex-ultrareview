@@ -141,14 +141,14 @@ class GateTests(unittest.TestCase):
         ledger = build_ledger([result('v1', 'verifier', 'sed -n 1,3p src/app.py'), result('r1', 'reproducer', 'pytest -q')])
         good = finding('UR-1', cand('C1'), verification('v1', quotes=[Quote('src/app.py', 2, 'return a - b')],
                                                          commands=['sed -n 1,3p src/app.py']),
-                       reproduction=Reproduction('r1', 'reproduced', 'pytest -q', '.', 1, 'F', 'e', 't', ''))
+                       reproduction=Reproduction('r1', 'reproduced', 'pytest -q', '.', 0, 'F', 'e', 't', ''))
         bad = finding('UR-2', cand('C2', line=1), verification('v9', quotes=[Quote('src/app.py', 1, 'def sub')],
                                                                commands=['make test']),
                       reproduction=Reproduction('r9', 'reproduced', 'make test', '.', 1, 'F', 'e', 't', ''))
         confirmed_without_quote = finding('UR-3', cand('C3', line=1), verification('v1', quotes=[]))
         state = ReviewState(findings=(good, bad, confirmed_without_quote), results=(result('v1', 'verifier'),))
         gate = gate_mod.run_gate(state, ledger, self.reader, detect_drift(self.snapshot, self.repo.path))
-        self.assertEqual(gate.status, 'complete')
+        self.assertEqual(gate.status, 'partial', 'evidence problems never yield a complete run')
         by_id = {f.id: f for f in gate.findings}
         self.assertEqual(by_id['UR-1'].evidence_issues, ())
         self.assertTrue(by_id['UR-1'].accepted)

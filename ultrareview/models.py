@@ -132,8 +132,7 @@ class Finding:
 
     @property
     def accepted(self) -> bool:
-        reproduced = self.reproduction is not None and self.reproduction.result == 'reproduced'
-        if self.evidence_issues and not reproduced:
+        if self.evidence_issues:
             return False
         if self.decision is not None and self.decision.action == 'reject':
             return False

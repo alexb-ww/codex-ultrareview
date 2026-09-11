@@ -47,7 +47,7 @@ def happy_scenario() -> dict:
             {'cluster_id': 'Y', 'member_ids': ['C3'], 'canonical_id': 'C3', 'rationale': 'single'}]}},
         'verifier:K1': {'output': verifier('CONFIRMED', 'P1', [('src/app.py', 2, 'return a - b')], ['sed -n 1,5p src/app.py']),
                         'commands': [{'command': 'sed -n 1,5p src/app.py', 'exit_code': 0, 'output': APP_LINE}]},
-        'verifier:K2': {'output': verifier('REFUTED', 'P3')},
+        'verifier:K2': {'output': verifier('REFUTED', 'P3', [('src/util.py', 1, 'def clamp(x, lo, hi):')])},
         'reproducer:UR-1': {'output': {'result': 'reproduced', 'command': repro_cmd, 'cwd': '.', 'exit_code': 0,
                                        'output_excerpt': '-1', 'explanation': 'prints -1, expected 5',
                                        'test_file': 'test_repro.py', 'blocked_reason': '', 'commands_run': [repro_cmd]},

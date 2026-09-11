@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from unittest import mock
 
 from tests.helpers import seeded_repo
 from ultrareview.errors import GitError
@@ -51,6 +52,32 @@ class WorktreeCopyTests(unittest.TestCase):
         head = self.repo.git('rev-parse', 'HEAD')
         commit_scope = resolve_scope(self.repo.path, ScopeSpec(kind='commit', commit=head))
         self.assertFalse(capture_state_patch(self.repo.path, commit_scope, self.repo.parent / 'empty.patch'))
+
+    def test_plain_copy_fallback_when_worktree_add_is_refused(self) -> None:
+        from ultrareview import worktree as wt
+        from ultrareview.errors import GitError as _GitError
+        real = wt.run_git
+
+        def refusing(repo, *args, **kwargs):
+            if args[:2] == ('worktree', 'add'):
+                raise _GitError("fatal: could not create leading directories of '.git/worktrees/x': Operation not permitted")
+            return real(repo, *args, **kwargs)
+
+        scope = resolve_scope(self.repo.path, ScopeSpec(kind='branch', base='main'))
+        with mock.patch.object(wt, 'run_git', refusing):
+            copy = create_worktree_copy(self.repo.path, scope, self.repo.parent / 'wt-plain')
+        try:
+            self.assertEqual(copy.kind, 'plain')
+            self.assertFalse((copy.path / '.git').exists())
+            self.assertTrue(copy.applied_diff)
+            self.assertEqual((copy.path / 'src/util.py').read_text(), 'def clamp(x, lo, hi):\n    return min(x, hi)\n')
+            self.assertEqual((copy.path / 'src/new_untracked.py').read_text(), 'NEW = True\n')
+            self.assertTrue(any('plain copy' in n for n in copy.notes))
+            reused = create_worktree_copy(self.repo.path, scope, copy.path, reuse=True)
+            self.assertEqual(reused.kind, 'plain')
+        finally:
+            remove_worktree_copy(copy)
+        self.assertFalse(copy.path.exists())
 
     def test_commit_scope_copy_is_that_commit(self) -> None:
         head = self.repo.git('rev-parse', 'HEAD')

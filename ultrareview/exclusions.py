@@ -42,7 +42,7 @@ def is_secret_like(path: str) -> bool:
     name = PurePosixPath(path).name.lower()
     if name in SECRET_BASENAMES:
         return True
-    if name == '.env' or name.startswith('.env.'):
+    if name.startswith('.env'):
         return True
     if name.startswith(SECRET_PREFIXES):
         return True

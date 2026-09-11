@@ -13,8 +13,9 @@ off limits.
 
 ## Your working copy
 
-`{{WORKTREE_PATH}}` — a detached worktree that matches the reviewed state
-exactly (committed, staged and untracked changes applied). Work only inside it.
+`{{WORKTREE_PATH}}` — a disposable copy that matches the reviewed state exactly
+(committed, staged and untracked changes applied; it may be a detached worktree or a
+plain copy without `.git`). Work only inside it.
 Do not commit, do not push, do not contact the network, do not install
 dependencies. Use the tooling that is already present; if the project's test
 runner or compiler is not available, say so with `blocked`.

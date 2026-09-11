@@ -229,6 +229,26 @@ def _remove_step_worktrees(repo: Path, run_dir: Path) -> tuple:
     return notes
 
 
+def guard_marker_path() -> Path:
+    """Where the optional PreToolUse guard looks for an active review (see hooks/)."""
+    import os
+    import tempfile
+    override = os.environ.get('ULTRAREVIEW_ACTIVE')
+    return Path(override) if override else Path(tempfile.gettempdir()) / 'ultrareview' / 'REVIEW_ACTIVE'
+
+
+def set_guard_marker(run_dir: Path, active: bool) -> None:
+    marker = guard_marker_path()
+    try:
+        if active:
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            marker.write_text(str(run_dir) + '\n', encoding='utf-8')
+        elif marker.exists():
+            marker.unlink()
+    except OSError:
+        return
+
+
 def run_step(config: RunConfig, emit: Emitter = stderr_emitter) -> RunOutcome:
     """One coordinator-driven step: replay recorded outputs, stop at the first missing batch."""
     started = time.monotonic()
@@ -249,8 +269,10 @@ def run_step(config: RunConfig, emit: Emitter = stderr_emitter) -> RunOutcome:
     except AgentsNeeded as need:
         pending = pending_from_specs(need.specs)
         write_pending(run_dir, pending)
+        set_guard_marker(run_dir, active=True)
         text = pending_instructions(pending, run_dir)
         return RunOutcome(exit_code=EXIT_AGENTS_NEEDED, status='agents-needed', markdown=text)
+    set_guard_marker(run_dir, active=False)
     notes = () if prepared.config.keep_worktree else _remove_step_worktrees(prepared.config.repo, run_dir)
     state = replace(state, worktree_notes=state.worktree_notes + notes)
     drift = detect_drift(prepared.snapshot, prepared.config.repo)

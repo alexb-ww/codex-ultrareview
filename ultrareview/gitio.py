@@ -33,10 +33,12 @@ def decode_nul(data: bytes) -> Tuple[str, ...]:
     return tuple(os.fsdecode(item) for item in data.split(b'\0') if item)
 
 
-def _run(argv: Tuple[str, ...], timeout: int) -> subprocess.CompletedProcess:
+def _run(argv: Tuple[str, ...], timeout: int, input_bytes: Optional[bytes] = None) -> subprocess.CompletedProcess:
     try:
-        return subprocess.run(list(argv), capture_output=True, env=git_env(),
-                              timeout=timeout, stdin=subprocess.DEVNULL)
+        if input_bytes is None:
+            return subprocess.run(list(argv), capture_output=True, env=git_env(),
+                                  timeout=timeout, stdin=subprocess.DEVNULL)
+        return subprocess.run(list(argv), capture_output=True, env=git_env(), timeout=timeout, input=input_bytes)
     except FileNotFoundError as exc:
         raise GitError('git executable not found on PATH') from exc
     except subprocess.TimeoutExpired as exc:
@@ -59,20 +61,22 @@ def filter_neutralisers(repo: Path, timeout: int = DEFAULT_TIMEOUT) -> Tuple[str
     return flags
 
 
-def run_git(repo: Path, *args: str, allow_fail: bool = False,
-            timeout: int = DEFAULT_TIMEOUT, ok_codes: Tuple[int, ...] = (0,)) -> bytes:
+def run_git(repo: Path, *args: str, allow_fail: bool = False, timeout: int = DEFAULT_TIMEOUT,
+            ok_codes: Tuple[int, ...] = (0,), input_bytes: Optional[bytes] = None) -> bytes:
     """Run git inside ``repo`` and return stdout bytes.
 
-    Diff-like commands additionally get ``--no-ext-diff --no-textconv`` and the
-    filter neutralisers. Exit codes outside ``ok_codes`` raise a GitError carrying
-    stderr unless ``allow_fail`` is set, in which case empty bytes are returned.
+    Every command runs with literal pathspecs, fsmonitor off and every configured
+    clean/smudge/process filter blanked (``status`` and ``diff`` both read
+    working-tree content through those filters). Diff-like commands additionally get
+    ``--no-ext-diff --no-textconv``. Exit codes outside ``ok_codes`` raise a GitError
+    carrying stderr unless ``allow_fail`` is set, in which case empty bytes are returned.
     """
-    prefix: Tuple[str, ...] = ('git', '-c', 'core.fsmonitor=false', '-C', str(repo))
+    prefix: Tuple[str, ...] = ('git', '--literal-pathspecs', '-c', 'core.fsmonitor=false', '-C', str(repo))
+    prefix += filter_neutralisers(repo, timeout)
     body: Tuple[str, ...] = tuple(args)
     if body and body[0] in DIFF_COMMANDS:
-        prefix += filter_neutralisers(repo, timeout)
         body = (body[0], '--no-ext-diff', '--no-textconv') + body[1:]
-    result = _run(prefix + body, timeout)
+    result = _run(prefix + body, timeout, input_bytes)
     if result.returncode not in ok_codes:
         if allow_fail:
             return b''

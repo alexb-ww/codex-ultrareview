@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$HOME/.agents/skills/ultrareview/hooks/ur_hook_guard.py\"",
+            "command": "python3 \"$HOME/.agents/skills/ultrareview/kit/hooks/ur_hook_guard.py\"",
             "timeout": 10
           }
         ]

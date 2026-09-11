@@ -61,19 +61,42 @@ def build_ledger(results: Iterable[AgentResult]) -> Ledger:
     return Ledger(entries=entries)
 
 
-def _contains_either(wanted: str, executed: str) -> bool:
-    return wanted == executed or wanted in executed or (len(executed) >= MIN_MATCH_LENGTH and executed in wanted)
+SEGMENT_SPLIT = re.compile(r'\s*(?:&&|\|\||;)\s*')
+CD_PREFIX = re.compile(r'^cd\s+\S+\s*$')
+
+
+def command_segments(command: str) -> Tuple[str, ...]:
+    """The whole normalised command plus each top-level `&&`/`;`/`||` segment.
+
+    A claim must equal the whole command or one of its segments; text that merely
+    appears inside an argument (for example printed by ``printf``) never matches.
+    """
+    body = normalise_command(command)
+    segments = tuple(seg for seg in SEGMENT_SPLIT.split(body) if seg and not CD_PREFIX.match(seg))
+    return (body,) + segments
+
+
+def _matching_entries(ledger: Ledger, agent_id: str, claimed: str) -> Tuple[LedgerEntry, ...]:
+    wanted = normalise_command(claimed)
+    if len(wanted) < MIN_MATCH_LENGTH:
+        return ()
+    wanted_loose = loose_form(claimed)
+    matches = []
+    for entry in ledger.for_agent(agent_id):
+        segments = command_segments(entry.command)
+        if wanted in segments or wanted_loose in {loose_form(seg) for seg in segments}:
+            matches.append(entry)
+    return tuple(matches)
 
 
 def command_ran(ledger: Ledger, agent_id: str, claimed: str) -> bool:
-    wanted = normalise_command(claimed)
-    if len(wanted) < MIN_MATCH_LENGTH:
-        return False
-    wanted_loose = loose_form(claimed)
-    for entry in ledger.for_agent(agent_id):
-        if _contains_either(wanted, entry.normalised) or _contains_either(wanted_loose, loose_form(entry.command)):
-            return True
-    return False
+    return bool(_matching_entries(ledger, agent_id, claimed))
+
+
+def exit_codes_for(ledger: Ledger, agent_id: str, claimed: str) -> Tuple[int, ...]:
+    """Exit codes the log recorded for the command a claim refers to (may be several runs)."""
+    return tuple(sorted({entry.exit_code for entry in _matching_entries(ledger, agent_id, claimed)
+                         if isinstance(entry.exit_code, int)}))
 
 
 def unauthenticated_commands(ledger: Ledger, agent_id: str, claimed: Iterable[str]) -> Tuple[str, ...]:
@@ -84,17 +107,25 @@ def _squash(text: str) -> str:
     return re.sub(r'\s+', ' ', text).strip()
 
 
+LONG_FRAGMENT = 20
+
+
 def quote_matches(lines: Tuple[str, ...], line: int, text: str) -> bool:
-    """True when ``text`` is (whitespace-insensitively) the content of ``line``."""
-    if not isinstance(line, int) or line < 1 or line > len(lines):
+    """True when ``text`` is the whitespace-normalised content of ``line``.
+
+    A blank or short actual line never matches; a long fragment (20+ characters)
+    of the actual line is accepted, since verifiers sometimes quote a statement
+    without its trailing comment.
+    """
+    if not isinstance(line, int) or isinstance(line, bool) or line < 1 or line > len(lines):
         return False
     actual = _squash(lines[line - 1])
     wanted = _squash(text)
-    if not wanted:
+    if not wanted or not actual:
         return False
     if actual == wanted:
         return True
-    return len(wanted) >= 6 and (wanted in actual or actual in wanted)
+    return len(wanted) >= LONG_FRAGMENT and wanted in actual
 
 
 def write_ledger(ledger: Ledger, path: Path) -> None:
